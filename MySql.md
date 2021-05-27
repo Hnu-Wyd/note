@@ -22,20 +22,20 @@ B树的特性：
 - 叶子节点具有相同的深度，叶子节点的指针为空。
 - 不存在重复元素。
 - 节点中的元素从左到有依次递增。
-![picture 4](img/MySql/Mysql_B-Tree.png)  
+![picture 4](img/Mysql/Mysql_B-Tree.png)  
 
 ### B+树
 B+树的特性
 - 非叶子节点不存data，只存储索引。
 - 叶子节点存储所有索引和data，这样可以存放更多的索引。一般Mysql一次磁盘IO读取16kb的数据，假如是InnoDB存储引擎，我们在数据库的主键一般是整型，占用8个字节，索引指针在数据库中占用6个字节，因此一个整体索引占用14B，在第一层就会有1170个数据，如果默认一个条数据为1B的话，一个节点可以存放16个数据，因此3层B+树可以存放21902400条数据。
 - 叶子节点通过双向链表连接，提高区间的访问能力。
-![picture 5](img/MySql/Mysql_B+Tree.png)  
+![picture 5](img/Mysql/Mysql_B+Tree.png)  
 
 ### MyISAM存储引擎
 在MyISAM存储引擎中一张表被存储为三个文件，一个表结构文件，一个数据文件，一个索引文件。它的数据和索引文件是分离的。
-![picture 6](img/MySql/Mysql_MyISAM.png)  
+![picture 6](img/Mysql/Mysql_MyISAM.png)  
 在它以B+树创建的索引是非聚集的，B+树的叶子节点存储的是数据的内存地址。
-![picture 7](img/MySql/Mysql_MyISAM_index.png)  
+![picture 7](img/Mysql/Mysql_MyISAM_index.png)  
 
 ### InnoDB存储引擎
 InnoDB存储引擎它的数据和索引是存放在一个文件中的。表文件本身就是一个以B+树组织的索引文件。在它以B+树创建的索引是聚集的，索引的叶子节点包含完整的数据记录。
@@ -103,10 +103,10 @@ id的编号是select的序列号，有几个select就有几个id，id越大优�
 3. subquery：包含在select中的子查询，不在from子句中，在外层from的前面。
 4. derived：包含在from子查询中的select。mysql会把子查询的查询结果放在一个临时表里面。临时表也称为派生表（derived的英文含义）。
 （关闭mysql5.7的对衍生表合并的新特性，```set session optimizer_switch='derived_merge=off'```执行以下查询语句```explain select (select 1 from actor where id = 1) from (select * from film where id = 1) der;```）
-![picture 10](img/MySql/Explain_select_type.png)  
+![picture 10](img/Mysql/Explain_select_type.png)  
 
 5. union:在union中第二个select。如sql:````explain select 1 union all select 1;````
-![picture 11](img/MySql/Explain_select_type_union.png)  
+![picture 11](img/Mysql/Explain_select_type_union.png)  
 
 
 #### 三、table列
