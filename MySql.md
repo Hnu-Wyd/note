@@ -17,6 +17,15 @@
     - [九、rows列](#九rows列)
     - [十、Extra列](#十extra列)
   - [索引失效](#索引失效)
+  - [Trace工具](#trace工具)
+  - [order by 排序](#order-by-排序)
+  - [Limit优化](#limit优化)
+  - [JOIN查询优化](#join查询优化)
+    - [mysql的表关联常见有两种算法](#mysql的表关联常见有两种算法)
+    - [被驱动表的关联字段没索引为什么要选择使用 BNL 算法而不使用 Nested-Loop Join 呢？](#被驱动表的关联字段没索引为什么要选择使用-bnl-算法而不使用-nested-loop-join-呢)
+    - [join优化](#join优化)
+  - [in和exsits优化](#in和exsits优化)
+  - [count() 优化](#count-优化)
 ### B-Tree
 B树的特性：
 - 叶子节点具有相同的深度，叶子节点的指针为空。
@@ -134,7 +143,7 @@ table列表示执行select访问的哪张表。当from查询有子查询的时�
 key_len计算规则如下：
 - 字符串
     - char(n)：n字节长度
-    - varchar(n)：2字节存储字符串长度，如果是utf-8，则长度 3n
+    - varchar(n)：2字节存储字符串长度，如果是utf-8，则长度 3n + 2
 - 数值类型
     - tinyint：1字节
     - smallint：2字节
@@ -171,6 +180,316 @@ key_len计算规则如下：
 - 尽量少使用```in、or```，用它查询时不一定会走索引，mysql内部会根据表大小、索引比例等多个因素来评估是否使用索引。
 
 尽量使用覆盖索引，减少```select *``` 的使用。
+
+
+
+### Trace工具
+trace工具的开启，与使用。
+```
+1 mysql> set session optimizer_trace="enabled=on",end_markers_in_json=on; ‐‐开启trace
+2 mysql> select * from employees where name > 'a' order by position; --要查询的sql
+3 mysql> SELECT * FROM information_schema.OPTIMIZER_TRACE;
+查看trace字段：
+6 {
+7 "steps": [
+8 {
+9 "join_preparation": { ‐‐第一阶段：SQL准备阶段
+10 "select#": 1,
+11 "steps": [
+12 {
+13 "expanded_query": "/* select#1 */ select `employees`.`id` AS `id`,`employees`.`name` AS `name`,`empl
+oyees`.`age` AS `age`,`employees`.`position` AS `position`,`employees`.`hire_time` AS `hire_time` from
+`employees` where (`employees`.`name` > 'a') order by `employees`.`position`"
+14 }
+15 ] /* steps */
+16 } /* join_preparation */17 },
+18 {
+19 "join_optimization": { ‐‐第二阶段：SQL优化阶段
+20 "select#": 1,
+21 "steps": [
+22 {
+23 "condition_processing": { ‐‐条件处理
+24 "condition": "WHERE",
+25 "original_condition": "(`employees`.`name` > 'a')",
+26 "steps": [
+27 {
+28 "transformation": "equality_propagation",
+29 "resulting_condition": "(`employees`.`name` > 'a')"
+30 },
+31 {
+32 "transformation": "constant_propagation",
+33 "resulting_condition": "(`employees`.`name` > 'a')"
+34 },
+35 {
+36 "transformation": "trivial_condition_removal",
+37 "resulting_condition": "(`employees`.`name` > 'a')"
+38 }
+39 ] /* steps */
+40 } /* condition_processing */
+41 },
+42 {
+43 "substitute_generated_columns": {
+44 } /* substitute_generated_columns */
+45 },
+46 {
+47 "table_dependencies": [ ‐‐表依赖详情
+48 {
+49 "table": "`employees`",
+50 "row_may_be_null": false,
+51 "map_bit": 0,
+52 "depends_on_map_bits": [
+53 ] /* depends_on_map_bits */
+54 }
+55 ] /* table_dependencies */
+56 },
+57 {
+58 "ref_optimizer_key_uses": [
+59 ] /* ref_optimizer_key_uses */
+60 },
+61 {
+62 "rows_estimation": [ ‐‐预估表的访问成本
+63 {
+64 "table": "`employees`",
+65 "range_analysis": {
+66 "table_scan": { ‐‐全表扫描情况
+67 "rows": 10123, ‐‐扫描行数
+68 "cost": 2054.7 ‐‐查询成本
+69 } /* table_scan */,70 "potential_range_indexes": [ ‐‐查询可能使用的索引
+71 {
+72 "index": "PRIMARY", ‐‐主键索引
+73 "usable": false,
+74 "cause": "not_applicable"
+75 },
+76 {
+77 "index": "idx_name_age_position", ‐‐辅助索引
+78 "usable": true,
+79 "key_parts": [
+80 "name",
+81 "age",
+82 "position",
+83 "id"
+84 ] /* key_parts */
+85 }
+86 ] /* potential_range_indexes */,
+87 "setup_range_conditions": [
+88 ] /* setup_range_conditions */,
+89 "group_index_range": {
+90 "chosen": false,
+91 "cause": "not_group_by_or_distinct"
+92 } /* group_index_range */,
+93 "analyzing_range_alternatives": { ‐‐分析各个索引使用成本
+94 "range_scan_alternatives": [
+95 {
+96 "index": "idx_name_age_position",
+97 "ranges": [
+98 "a < name" ‐‐索引使用范围
+99 ] /* ranges */,
+100 "index_dives_for_eq_ranges": true,
+101 "rowid_ordered": false, ‐‐使用该索引获取的记录是否按照主键排序
+102 "using_mrr": false,
+103 "index_only": false, ‐‐是否使用覆盖索引
+104 "rows": 5061, ‐‐索引扫描行数
+105 "cost": 6074.2, ‐‐索引使用成本
+106 "chosen": false, ‐‐是否选择该索引
+107 "cause": "cost"
+108 }
+109 ] /* range_scan_alternatives */,
+110 "analyzing_roworder_intersect": {
+111 "usable": false,
+112 "cause": "too_few_roworder_scans"
+113 } /* analyzing_roworder_intersect */
+114 } /* analyzing_range_alternatives */
+115 } /* range_analysis */
+116 }
+117 ] /* rows_estimation */
+118 },
+119 {
+120 "considered_execution_plans": [
+121 {122 "plan_prefix": [
+123 ] /* plan_prefix */,
+124 "table": "`employees`",
+125 "best_access_path": { ‐‐最优访问路径
+126 "considered_access_paths": [ ‐‐最终选择的访问路径
+127 {
+128 "rows_to_scan": 10123,
+129 "access_type": "scan", ‐‐访问类型：为scan，全表扫描
+130 "resulting_rows": 10123,
+131 "cost": 2052.6,
+132 "chosen": true, ‐‐确定选择
+133 "use_tmp_table": true
+134 }
+135 ] /* considered_access_paths */
+136 } /* best_access_path */,
+137 "condition_filtering_pct": 100,
+138 "rows_for_plan": 10123,
+139 "cost_for_plan": 2052.6,
+140 "sort_cost": 10123,
+141 "new_cost_for_plan": 12176,
+142 "chosen": true
+143 }
+144 ] /* considered_execution_plans */
+145 },
+146 {
+147 "attaching_conditions_to_tables": {
+148 "original_condition": "(`employees`.`name` > 'a')",
+149 "attached_conditions_computation": [
+150 ] /* attached_conditions_computation */,
+151 "attached_conditions_summary": [
+152 {
+153 "table": "`employees`",
+154 "attached": "(`employees`.`name` > 'a')"
+155 }
+156 ] /* attached_conditions_summary */
+157 } /* attaching_conditions_to_tables */
+158 },
+159 {
+160 "clause_processing": {
+161 "clause": "ORDER BY",
+162 "original_clause": "`employees`.`position`",
+163 "items": [
+164 {
+165 "item": "`employees`.`position`"
+166 }
+167 ] /* items */,
+168 "resulting_clause_is_simple": true,
+169 "resulting_clause": "`employees`.`position`"
+170 } /* clause_processing */
+171 },
+172 {
+173 "reconsidering_access_paths_for_index_ordering": {
+174 "clause": "ORDER BY",175 "steps": [
+176 ] /* steps */,
+177 "index_order_summary": {
+178 "table": "`employees`",
+179 "index_provides_order": false,
+180 "order_direction": "undefined",
+181 "index": "unknown",
+182 "plan_changed": false
+183 } /* index_order_summary */
+184 } /* reconsidering_access_paths_for_index_ordering */
+185 },
+186 {
+187 "refine_plan": [
+188 {
+189 "table": "`employees`"
+190 }
+191 ] /* refine_plan */
+192 }
+193 ] /* steps */
+194 } /* join_optimization */
+195 },
+196 {
+197 "join_execution": { ‐‐第三阶段：SQL执行阶段
+198 "select#": 1,
+199 "steps": [
+200 ] /* steps */
+201 } /* join_execution */
+202 }
+203 ] /* steps */
+204 }
+205
+206 结论：全表扫描的成本低于索引扫描，所以mysql最终选择全表扫描
+207
+208 mysql> select * from employees where name > 'zzz' order by position;
+209 mysql> SELECT * FROM information_schema.OPTIMIZER_TRACE;
+210
+211 查看trace字段可知索引扫描的成本低于全表扫描，所以mysql最终选择索引扫描
+212
+213 mysql> set session optimizer_trace="enabled=off"; ‐‐关闭trace
+```
+
+### order by 排序
+- Mysql支持两种排序，filesort和index，using index表示使用Mysql的索引就能完成排序，效率更好，filesort需要进行磁盘io效率低。
+- order by满足下面情况会使用using index 
+  - sql语句使用索引最前列
+  - where 和 order by字句条件满足索引最前列。
+- 尽量使用索引完成排序，遵循最左前缀法则。
+- 能用覆盖索引，就用覆盖索引。
+- group by和order by 类似，先排序后分组，遵循最左前缀法则，如果group by 不需要排序可以加上 order by null。
+- where的性能改与having，能写在where中就不要写在having中。
+
+using filesort文件排序
+MySQL 通过比较系统变量 max_length_for_sort_data(默认1024字节) 的大小和需要查询的字段总大小来
+判断使用哪种排序模式。
+1. 如果 max_length_for_sort_data 比查询字段的总长度大，那么使用 单路排序模式；
+2. 如果 max_length_for_sort_data 比查询字段的总长度小，那么使用 双路排序模式。
+
+如果 MySQL 排序内存有条件可以配置比较大，可以适当增大 max_length_for_sort_data 的值，让优化器优先选择全字段排序(单路排序)，把需要的字段放到 sort_buffer 中，这样排序后就会直接从内存里返回查询结果了。所以，MySQL通过 max_length_for_sort_data 这个参数来控制排序，在不同场景使用不同的排序模式，从而提升排序效率。注意，如果全部使用sort_buffer内存排序一般情况下效率会高于磁盘文件排序，但不能因为这个就随便增大sort_buffer(默认1M)，mysql很多参数设置都是做过优化的，不要轻易调整。
+
+单路排序：一次性取出满足条件的所有字段，然后再内存sort buff中进行排序，用trace工具可以看到sort_mode信息里面显示``` < sort_key, additional_fields >或者< sort_key, packed_additional_fields >```。
+
+双路排序（回表排序）：首先去除排序的字段和对应的行id,然后再sort buff中进行排序，排完序后再次回表取出其他字段，用trace工具可以看到sort_mode信息里显示```< sort_key, rowid >```。
+
+### Limit优化
+```mysql> select * from employees limit 10000,10;```
+
+从表 employees 中取出从 10001 行开始的 10 行记录。看似只查询了 10 条记录，实际这条 SQL 是先读取 10010条记录，然后抛弃前 10000 条记录，然后读到后面 10 条想要的数据。因此要查询一张大表比较靠后的数据，执行效率是非常低的。
+
+- 根据自增且连续的主键排序的分页查询，需要满足以下两个条件：
+  - 主键自增且连续(不能删除数据)
+  - 结果是按照主键排序的
+  
+  
+  ```mysql> EXPLAIN select * from employees where id > 90000 limit 5;```
+
+- 根据非主键字段排序的分页查询
+  ```
+  mysql> select * from employees e inner join (select id from employees order by name limit 90000,5) ed on e.id = ed.id;
+  ```
+
+### JOIN查询优化
+#### mysql的表关联常见有两种算法
+- 嵌套循环连接 Nested-Loop Join 算法
+  
+  ```EXPLAIN select*from t1 inner join t2 on t1.a= t2.a;```
+  ![picture 1](img/MySql/Mysql_join_NLJ.png)  
+
+  一次一行循环地从第一张表（称为驱动表）中读取行，在这行数据中取到关联字段，根据关联字段在另一张表（被驱动。
+  从执行计划中可以看到这些信息：
+  - 驱动表是 t2，被驱动表是 t1。先执行的就是驱动表(执行计划结果的id如果一样则按从上到下顺序执行sql)；优化器一般会优先选择小表做驱动表。所以使用 inner join 时，排在前面的表并不一定就是驱动表。
+  - 使用了 NLJ算法。一般 join 语句中，如果执行计划 Extra 中未出现 Using join buffer 则表示使用的 join 算法是 NLJ表）里取出满足条件的行，然后取出两张表的结果合集。
+- 基于块的嵌套循环连接 Block Nested-Loop Join 算法  
+如果被驱动表的关联字段没有索引，使用NLJ算法的性能会比较第，mysql会选择BNLJ算法。BNLJ算法：把驱动表的数据读入到 join_buffer 中，然后扫描被驱动表，把被驱动表每一行取出来跟join_buffer 中的数据做对比。
+![picture 2](img/MySql/Mysql_join_BNLJ.png) 
+整个过程对表 t1 和 t2 都做了一次全表扫描，因此扫描的总行数为10000(表 t1 的数据总量) + 100(表 t2 的数据总量) =10100。并且 join_buffer 里的数据是无序的，因此对表 t1 中的每一行，都要做 100 次判断，所以内存中的判断次数是100 * 10000= 100 万次。 
+#### 被驱动表的关联字段没索引为什么要选择使用 BNL 算法而不使用 Nested-Loop Join 呢？
+如果上面第二条sql使用 Nested-Loop Join，那么扫描行数为 100 * 10000 = 100万次，这个是磁盘扫描。很显然，用BNL磁盘扫描次数少很多，相比于磁盘扫描，BNL的内存计算会快得多。因此MySQL对于被驱动表的关联字段没索引的关联查询，一般都会使用 BNL 算法。如果有索引一般选择 NLJ 算法，有索引的情况下 NLJ 算法比 BNL算法性能更高。
+
+#### join优化
+- 关联字段加索引，让mysql做join操作时尽量选择NLJ算法
+- 小标驱动大表，写多表连接sql时如果明确知道哪张表是小表可以用straight_join写法固定连接驱动方式，省去mysql优化器自己判断的时间。
+  
+straight_join解释：straight_join功能同join类似，但能让左边的表来驱动右边的表，能改表优化器对于联表查询的执行顺序。straight_join只适用于inner join，并不适用于left join，right join。（因为left join，right join已经代表指定了表的执行顺序）尽可能让优化器去判断，因为大部分情况下mysql优化器是比人要聪明的。使用straight_join一定要慎重，因为部分情况下人为指定的执行顺序并不一定会比优化引擎要靠谱。
+
+### in和exsits优化
+原则：小标驱动大表。
+- ```in``` 优化原则
+  
+  ``` select * from 大表 where id in (select id from 小表);```
+
+- ```exsits``` 优化原则
+
+  ``` select * from 小表 where id exsits (select id from 大表 where 大表.id = 小表.id);```
+
+### count() 优化
+```
+mysql> EXPLAIN select count(1) from employees;
+mysql> EXPLAIN select count(id) from employees;mysql> EXPLAIN select count(name) from employees;
+mysql> EXPLAIN select count(*) from employees;
+```  
+四个sql的执行计划一样，说明这四个sql执行效率应该差不多，区别在于根据某个字段count不会统计字段为null值的数据行。
+
+查询mysql自己维护的总行数
+- 对于myisam存储引擎的表做不带where条件的count查询性能是很高的，因为myisam存储引擎的表的总行数会被mysql存储在磁盘上，查询不需要计算。对于innodb存储引擎的表mysql不会存储表的总记录行数，查询count需要实时计算。
+- ```show table status``` 如果只需要知道表总行数的估计值可以用如下sql查询，性能很高。
+- 将总数维护到Redis里，但很难保证事务。
+- 增加计数表，同时要保证在同一个事务里面。
+
+
+
+
+
+
 
 
 
