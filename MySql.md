@@ -102,6 +102,7 @@ Explain可以模拟优化器来执行sql，分析查询语句或者结构的性�
 31
 32 INSERT INTO `film_actor` (`id`, `film_id`, `actor_id`) VALUES (1,1,1),
 (2,1,2),(3,2,1);
+
 ```
 #### 一、id列
 id的编号是select的序列号，有几个select就有几个id，id越大优先级越高越先执行，id相同依次从上到下执行，id为null则最后执行。
@@ -442,7 +443,7 @@ MySQL 通过比较系统变量 max_length_for_sort_data(默认1024字节) 的大
 - 嵌套循环连接 Nested-Loop Join 算法
   
   ```EXPLAIN select*from t1 inner join t2 on t1.a= t2.a;```
-  ![picture 1](img/MySql/Mysql_join_NLJ.png)  
+  ![picture 1](img/Mysql/Mysql_join_NLJ.png)  
 
   一次一行循环地从第一张表（称为驱动表）中读取行，在这行数据中取到关联字段，根据关联字段在另一张表（被驱动。
   从执行计划中可以看到这些信息：
@@ -450,7 +451,7 @@ MySQL 通过比较系统变量 max_length_for_sort_data(默认1024字节) 的大
   - 使用了 NLJ算法。一般 join 语句中，如果执行计划 Extra 中未出现 Using join buffer 则表示使用的 join 算法是 NLJ表）里取出满足条件的行，然后取出两张表的结果合集。
 - 基于块的嵌套循环连接 Block Nested-Loop Join 算法  
 如果被驱动表的关联字段没有索引，使用NLJ算法的性能会比较第，mysql会选择BNLJ算法。BNLJ算法：把驱动表的数据读入到 join_buffer 中，然后扫描被驱动表，把被驱动表每一行取出来跟join_buffer 中的数据做对比。
-![picture 2](img/MySql/Mysql_join_BNLJ.png) 
+![picture 2](img/Mysql/Mysql_join_BNLJ.png) 
 整个过程对表 t1 和 t2 都做了一次全表扫描，因此扫描的总行数为10000(表 t1 的数据总量) + 100(表 t2 的数据总量) =10100。并且 join_buffer 里的数据是无序的，因此对表 t1 中的每一行，都要做 100 次判断，所以内存中的判断次数是100 * 10000= 100 万次。 
 #### 被驱动表的关联字段没索引为什么要选择使用 BNL 算法而不使用 Nested-Loop Join 呢？
 如果上面第二条sql使用 Nested-Loop Join，那么扫描行数为 100 * 10000 = 100万次，这个是磁盘扫描。很显然，用BNL磁盘扫描次数少很多，相比于磁盘扫描，BNL的内存计算会快得多。因此MySQL对于被驱动表的关联字段没索引的关联查询，一般都会使用 BNL 算法。如果有索引一般选择 NLJ 算法，有索引的情况下 NLJ 算法比 BNL算法性能更高。
