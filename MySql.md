@@ -26,6 +26,16 @@
     - [join优化](#join优化)
   - [in和exsits优化](#in和exsits优化)
   - [count() 优化](#count-优化)
+  - [Mysql 锁分类](#mysql-锁分类)
+  - [MyISAM和innoDB的最大两个不同点](#myisam和innodb的最大两个不同点)
+  - [事务](#事务)
+  - [事务的隔离](#事务的隔离)
+  - [可重复读的实现原理](#可重复读的实现原理)
+  - [串行化](#串行化)
+  - [幻读](#幻读)
+  - [锁定特定行与死锁](#锁定特定行与死锁)
+    - [锁定特定行](#锁定特定行)
+    - [死锁](#死锁)
 ### B-Tree
 B树的特性：
 - 叶子节点具有相同的深度，叶子节点的指针为空。
@@ -485,6 +495,87 @@ mysql> EXPLAIN select count(*) from employees;
 - ```show table status``` 如果只需要知道表总行数的估计值可以用如下sql查询，性能很高。
 - 将总数维护到Redis里，但很难保证事务。
 - 增加计数表，同时要保证在同一个事务里面。
+
+### Mysql 锁分类
+- 从性能上分为乐观锁（用版本对比来实现）和悲观锁。
+- 从对数据库的操作上分为读锁和写锁，两者都属于悲观锁。
+  - 读锁（共享锁）：针对同一份数据，多个读可以同时进行而不会相互影响。
+  - 写锁（排它锁）：当前写操作没有完成前，它会阻断其他写锁和读锁。
+
+- 从操作粒度上分，分为表锁和行锁。
+  - 表锁：锁整张表，速度快，开销小，锁的粒度大，发生冲突的概率高，并行度低。
+    1. 手动加表锁
+    ```lock table 表名称 read(write),表名称2 read(write);```
+         - 表加读锁，当前session和其他session都可以读取该表，当前session更新或插入锁定的表都会报错，其他session插入或更新表数据会等待。
+         - 表加写锁：当前session可以对表进行增删改查，其他session进行任何操作都被阻塞，需等待。
+
+    1. 查看表加的锁  ``` show open tables ```
+    2. 删除表锁 ``` unlock tables ```
+   
+  - 行锁：锁某一行数据，速度慢，开销大，会出现死锁，锁粒度小，发生冲突的概率低，并行度高。
+    1. InnoDB的行锁是针对索引加的锁，不是针对记录加的锁。并且该索引不能失效，否则都会从行锁升级为表锁；无索引（针对where条件）行锁会升级为表锁。
+    2. 通过检查InnoDB_row_lock状态变量来分析系统上的行锁的争夺情况```show status  like'innodb_row_lock%';``` 对各个状态量的说明如下：
+        - Innodb_row_lock_current_waits: 当前正在等待锁定的数量
+        - Innodb_row_lock_time: 从系统启动到现在锁定总时间长度
+        - Innodb_row_lock_time_avg: 每次等待所花平均时间
+        - Innodb_row_lock_time_max：从系统启动到现在等待最长的一次所花时间
+       - Innodb_row_lock_waits:系统启动后到现在总共等待的次数
+
+    对于这5个状态变量，比较重要的主要是：Innodb_row_lock_time_avg （等待平均时长）Innodb_row_lock_waits （等待总次数）Innodb_row_lock_time（等待总时长）尤其是当等待次数很高，而且每次等待时长也不小的时候，我们就需要分析系统中为什么会有如此多的等待，然后根据分析结果着手制定优化计划。
+
+MyISAM在执行查询select语句前都会自动给涉及的所有表加表锁，在执行增删改之前，会自动给涉及的表加写锁。
+
+### MyISAM和innoDB的最大两个不同点
+1. innoDB支持事务。
+2. innoDB支持行级锁。
+
+### 事务
+行锁支持事务（A：原子性 C：一致性 I：隔离性 D：持久性），行锁是默认开启的；但同时也会存在并发事务的问题。
+
+- 更新丢失：两个事务同时更新一条数据，最后的更新覆盖了其他事务所做的更新。
+- 脏读：事务A读取到了另一个事务B还未提交的数据，如果事务B回滚，则事务A读取的数据无效，不符合一致性。
+- 不可重复读：事务A读取到事务B已提交的修改数据，不符合隔离性。
+- 幻读：事务A读取到了事务B新增的数据，不符合隔离性。
+
+### 事务的隔离
+查看当前事务的隔离级:``` show variables like 'tx_isolation'; ```
+设置事务的隔离级别：``` set tx_isolation =  'REPEATEABLE-READ'; ```
+![picture 1](img/Mysql/Mysql_tx_isolation.png) 
+
+### 可重复读的实现原理
+可重复读依赖于MVCC(multi-version concurrency control)机制，基于下图原理实现：
+![picture 3](img/Mysql/Mysql_rpr_mvcc_data.png)  
+![picture 2](img/Mysql/Mysql_rpr_mvcc.png)  
+
+
+### 串行化
+mysql中事务隔离级别为serializable时会锁表，因此不会出现幻读的情况，这种隔离级别并发性极低，开发中很少会用到。
+
+### 幻读
+Mysql默认级别是repeatable-read，会出现幻读，使用间隙锁在某些情况下可以解决幻读问题。要避免幻读可以用间隙锁在Session_1下面执行 ```update account set name = 'zhuge' where id > 10 and id <=20;```，则其他Session没法在这个范围所包含的
+间隙里插入或修改任何数据。
+
+### 锁定特定行与死锁
+#### 锁定特定行
+锁定某一行还可以用```lock in share mode(共享锁)``` 和```for update(排
+它锁)```，例如：```select * from test_innodb_lock where a = 2 for update;```这样其他session只能读这行数据，修改则会被阻塞，直到锁定行的session提交。
+#### 死锁
+```set tx_isolation='repeatable-read';```
+- Session_1执行：```select * from account where id=1 for update;```
+- Session_2执行：```select * from account where id=2 for update;```
+- Session_1执行：```select * from account where id=2 for update;```
+- Session_2执行：```select * from account where id=1 for update;```
+
+查看近期死锁日志信息：```show engine innodb status\G;```
+大多数情况mysql可以自动检测死锁并回滚产生死锁的那个事务，但是有些情况
+mysql没法自动检测死锁。
+
+
+
+
+
+
+
 
 
 
