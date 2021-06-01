@@ -273,10 +273,12 @@ G1收集器维护了一个优先级列表，根据用户指定的停顿时间，
 #### Jinfo
 可以查看正在运行的java应用程序的扩展参数
 - 查看jvm参数 ```jinfo -flags 进程id```
-![picture 1](img/JVM/JVM_jinfo_flags.png)  
+  
+  ![picture 1](img/JVM/JVM_jinfo_flags.png)  
 
 - 查看java系统参数 ```jinfo -sysprops 进程id```
-![picture 3](img/JVM/JVM_jinfo_sysprops.png) 
+  
+  ![picture 3](img/JVM/JVM_jinfo_sysprops.png) 
 
 #### Jstat
 垃圾回收统计
