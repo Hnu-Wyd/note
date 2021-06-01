@@ -1,3 +1,29 @@
+- [ZooKeeper是什么？](#zookeeper是什么)
+- [ZooKeeper的节点类型](#zookeeper的节点类型)
+- [ZooKeeper的集群角色说明](#zookeeper的集群角色说明)
+- [ZooKeeper的Server的工作状态](#zookeeper的server的工作状态)
+- [ZooKeeper的同步流程](#zookeeper的同步流程)
+- [节点的监听](#节点的监听)
+- [ZooKeeper提供了什么？](#zookeeper提供了什么)
+  - [文件系统](#文件系统)
+  - [通知机制](#通知机制)
+- [ZoooKeeper的典型应用场景](#zoookeeper的典型应用场景)
+  - [集群管理](#集群管理)
+  - [分布式注册中心](#分布式注册中心)
+  - [分布式Job](#分布式job)
+  - [分布式锁](#分布式锁)
+- [ZooKeeper的启动流程](#zookeeper的启动流程)
+- [ZooKeeper的工作原理](#zookeeper的工作原理)
+- [Leader选举](#leader选举)
+  - [启动时的leader选举](#启动时的leader选举)
+  - [运行过程中的Leader选举](#运行过程中的leader选举)
+- [数据同步机制](#数据同步机制)
+  - [客户端写入请求](#客户端写入请求)
+  - [服务节点初始化同步](#服务节点初始化同步)
+- [ZooKeeper的事务日志和快照日志](#zookeeper的事务日志和快照日志)
+- [机器中为什么会有Leader](#机器中为什么会有leader)
+- [ZooKeeper负载均衡和Nginx负载均衡的区别](#zookeeper负载均衡和nginx负载均衡的区别)
+
 ### ZooKeeper是什么？
 它是一个分布式的，开源的应用程序协调服务，基于它公开的API，可以实现同步、节点状态、配置、服务注册等功能。znode是它的基本单元，叫做节点，节点下面可以包含子节点，最后以树的方式呈现。
 
@@ -174,7 +200,7 @@ leader选举分为两个过程：
 
 - 改变服务器状态。一旦确定了 Leader，每个服务器就会更新自己的状态，如果是 Follower，那么就变更为FOLLOWING，如果是 Leader，就变更为 LEADING。
 
-### 运行过程中的Leader选举
+#### 运行过程中的Leader选举
 当集群中的 leader 服务器出现宕机或者不可用的情况时，那么整个集群将无法对外提供服务，而是进入新一轮的Leader 选举，服务器运行期间的 Leader 选举和启动时期的 Leader 选举基本过程是一致的。
 
 - 变更状态。Leader 挂后，余下的非 Observer 服务器都会将自己的服务器状态变更为 LOOKING，然后开始进入 Leader 选举过程。
