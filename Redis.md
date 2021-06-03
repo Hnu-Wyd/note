@@ -4,7 +4,7 @@
 - [Redis的数据结构及常用操作](#redis的数据结构及常用操作)
 	- [String](#string)
 	- [Hash](#hash)
-- [](#)
+	- [List](#list)
 	- [Set](#set)
 	- [ZSET](#zset)
 - [Redis持久化](#redis持久化)
@@ -85,7 +85,7 @@ HGETALL  key				//返回哈希表key中所有的键值
 HINCRBY  key  field  increment 		//为哈希表key中field键的值加上增量increment
 ```
 
-### 
+#### List
 ```
 List常用操作
 LPUSH  key  value [value ...] 		//将一个或多个值value插入到key列表的表头(最左边)
