@@ -1,3 +1,17 @@
+- [BIO（Bloing IO）](#biobloing-io)
+  - [缺点](#缺点)
+  - [优点](#优点)
+  - [应用场景](#应用场景)
+  - [代码实现](#代码实现)
+- [NIO（Non Blocking IO）](#nionon-blocking-io)
+  - [应用场景](#应用场景-1)
+  - [代码实现](#代码实现-1)
+- [AIO](#aio)
+  - [应用场景](#应用场景-2)
+  - [代码实现](#代码实现-2)
+- [BIO NIO AIO对比](#bio-nio-aio对比)
+  - [形象案例分析](#形象案例分析)
+
 ### BIO（Bloing IO）
 BIO是一个同步阻塞IO，没一个连接都需要新增一个线程进行处理，即一个客户端连接对应一个处理线程。
 
@@ -75,9 +89,11 @@ public class SocketClient {
 
 ### NIO（Non Blocking IO）
 NIO是一种同步非阻塞IO，可以用个一个或多个线程处理大量客户端的请求，客户端发送的连接都会注册到多路复用器selector上，由多路复用器轮询连接事件进行处理。
+
 ![picture 3](img/IO/NIO_simple_frame.png)  
 
 NIO有三个核心组件，通道（channel）、缓冲区（buffer）、selector（多路复用器）。
+
 ![picture 4](img/IO/NIO_frame.png) 
 - channel：类似于流，每个 channel对应一个buffer缓冲区，buffer的底层就是数组。
 - channel会注册到selector上，由selector根据事件类型把它交给空闲的线程。
