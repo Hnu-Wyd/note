@@ -7,6 +7,7 @@
   - [Bean的懒汉式加载](#bean的懒汉式加载)
   - [@Condition进行条件判断](#condition进行条件判断)
 - [往Spring容器中添加组件的方式](#往spring容器中添加组件的方式)
+- [Bean的生命周期](#bean的生命周期)
 - [Bean的初始化方法和销毁方法](#bean的初始化方法和销毁方法)
 - [Bean的后置处理器](#bean的后置处理器)
 - [@Value组件赋值](#value组件赋值)
@@ -165,6 +166,7 @@ public class MainConfig {
     }
     ```
 
+
     ```java
     public class WydImportSelector implements ImportSelector {
         //可以获取导入类的注解信息
@@ -196,7 +198,7 @@ public class MainConfig {
     public class MainConfig {
 
     }
-```
+    ```
 
 4. 通过实现FacotryBean来实现接口注册
 
