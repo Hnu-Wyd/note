@@ -50,6 +50,7 @@ ES是ElasticSearch的简称，是一个分布式的索引库，对外提供检�
 ES中的索引等于数据库，可以有很多个，它的类型type可以理解为一张表，只存在es6.x中，es7.x中没有type这个含义了。文档Docment类似于行数据；Filed是行数据的属性列。
 
 ES的是非关系型的，没有办法作连接查询，也就是没有办法作跨索引查询。它和关系型数据库的类比如下：
+
 ![picture 4](img/ES/Compare_Relation_Database.png)  
 
 你往 ES 里写的数据，实际上都写到磁盘文件里去了，查询的时候，操作系统会将磁盘文件里的数据自动缓存到 Filesystem Cache 里面去。ES 的搜索引擎严重依赖于底层的 Filesystem Cache，你如果给 Filesystem Cache 更多的内存，尽量让内存可以容纳所有的 IDX Segment File 索引数据文件，那么你搜索的时候就基本都是走内存的，性能会非常高。如果走磁盘一般肯定上秒，搜索性能绝对是秒级别的，1 秒、5 秒、10 秒。但如果是走 Filesystem Cache，是走纯内存的，那么一般来说性能比走磁盘要高一个数量级，基本上就是毫秒级的，从几毫秒到几百毫秒不等。
@@ -103,11 +104,14 @@ ES的是非关系型的，没有办法作连接查询，也就是没有办法作
        3. 协调节点等待所有相关节点返回数据，然后返回给客户端。
 ### 写入原理
 ![picture 8](img/ES/Write_Logic.png)  
+![picture 1](img/ES/Write_Process.png)  
+
 
 1. 和数据库不同，数据库是先写CommitLog，然后再写内存，而Elasticsearch是先写内存，最后才写TransLog，一种可能的原因是Lucene的内存写入会有很复杂的逻辑，很容易失败，比如分词，字段长度超过限制等，比较重，为了避免TransLog中有大量无效记录，减少recover的复杂度和提高速度，所以就把写Lucene放在了最前面。
 2. 写Lucene内存后，并不是可被搜索的，需要通过Refresh把内存的对象转成完整的Segment后，然后再次reopen后才能被搜索，一般这个时间设置为1秒钟，导致写入Elasticsearch的文档，最快要1秒钟才可被从搜索到，所以Elasticsearch在搜索方面是NRT（Near Real Time）近实时的系统。
 3. 当Elasticsearch作为NoSQL数据库时，查询方式是GetById，这种查询可以直接从TransLog中查询，这时候就成了RT（Real Time）实时系统。
 4. 每隔一段比较长的时间，比如30分钟后，Lucene会把内存中生成的新Segment刷新到磁盘上，刷新后索引文件已经持久化了，历史的TransLog就没用了，会清空掉旧的TransLog。
+5. translog 其实也是先写入 os cache 的，默认每隔 5 秒刷一次到磁盘中去，所以默认情况下，可能有 5 秒的数据会仅仅停留在 buffer 或者 translog 文件的 os cache 中，如果此时机器挂了，会丢失 5 秒钟的数据。但是这样性能比较好，最多丢 5 秒的数据。也可以将 translog 设置成每次写操作必须是直接 fsync 到磁盘，但是性能会差很多。
 
 ![picture 7](img/ES/Index_Write.png)  
 
