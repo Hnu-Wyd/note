@@ -40,7 +40,8 @@
 B树的特性：
 - 叶子节点具有相同的深度，叶子节点的指针为空。
 - 不存在重复元素。
-- 节点中的元素从左到有依次递增。
+- 节点中的元素从左到右依次递增。
+
 ![picture 4](img/Mysql/Mysql_B-Tree.png)  
 
 ### B+树
@@ -133,18 +134,18 @@ id的编号是select的序列号，有几个select就有几个id，id越大优�
 table列表示执行select访问的哪张表。当from查询有子查询的时候table列是````<deriver N> ````N表示当前查询依赖```id=N```的查询。当有union时，```<union 1,2>```,1和2表参与union的select行的id。
 
 #### 四、type列
-表示关联类型或者访问类型，即mysql决定要如何进行查找。从最优到最差依次是```null > system > const > eq_ref > ref > rang > index > all``` 一般的sql查询要优化到rang基别，最好是到ref。
+表示关联类型或者访问类型，即mysql决定要如何进行查找。从最优到最差依次是```null > system > const > eq_ref > ref > rang > index > all``` 一般的sql查询要优化到rang级别，最好是到ref。
 - null：在查询的时候不用访问表或者索引。
 ```select 1 from film where 1```
-- consta, system：单表中最多有一个匹配行，查询起来非常快，一般根据主键和唯一索引查询，system是const的特列，表中只有一行数据。
-- eq_ref：使用主键或唯一索引来进行扫描，对于每个索引键表中只有一条记录与之匹配。
+- const, system：单表中最多有一个匹配行，查询起来非常快，一般根据主键和唯一索引查询，system是const的特列，表中只有一行数据。
+- eq_ref：使用主键或唯一索引来进行扫描，对于每个索引键，表中只有一条记录与之匹配。
 - ref：使用普通索引或者普通索引的前缀进行扫描。
 - rang：扫描部分索引，索引的范围查询，常见于```between，<，>```等查询。
 - index：查询全部索引树。
 - all：全表扫描。
 
 #### 五、possible_keys列
-表示查询可能使用到的所有，假如为此列有值，而key列为空时，表示表的数据不多，mysql任务使用所有对查询的帮助不大，因此选择了全表扫描，如果此列为空，需要优化sql，查看where条件是否可以创造个索引。
+表示查询可能使用到的索引，假如为此列有值，而key列为空时，表示表的数据不多，mysql任务使用索引对查询的帮助不大，因此选择了全表扫描，如果此列为空，需要优化sql，查看where条件是否可以创造个索引。
 
 #### 六、key列
 表示实际查询中使用的那个索引，如果没有索引则为空，如果想强制使用或者忽略```possible_keys```列中的索引，可以在查询的时候加上```force index、ignore index```。
@@ -184,7 +185,7 @@ key_len计算规则如下：
 ### 索引失效
 - 最左前缀法则：带头大哥不能死，中间兄弟不能掉。如果不遵循词法则会导致索引失效。
 - 在索引上做计算、函数、自动或手动类型转换会导致索引失效。
-- 使用 ```!=、=、<、>```无法使用索引。
+- 使用 ```!=、<、>```无法使用索引。
 - is null、is not null也无法使用索引。
 - like查询使用通配符（```$,%```）开头会使索引失效。
 - 字符串不加单引号会使索引失效。
@@ -417,10 +418,10 @@ oyees`.`age` AS `age`,`employees`.`position` AS `position`,`employees`.`hire_tim
 - 尽量使用索引完成排序，遵循最左前缀法则。
 - 能用覆盖索引，就用覆盖索引。
 - group by和order by 类似，先排序后分组，遵循最左前缀法则，如果group by 不需要排序可以加上 order by null。
-- where的性能改与having，能写在where中就不要写在having中。
+- where的性能优于having，能写在where中就不要写在having中。
 
 using filesort文件排序
-MySQL 通过比较系统变量 max_length_for_sort_data(默认1024字节) 的大小和需要查询的字段总大小来
+MySQL 通过比较系统变量 max_length_for_sort_data(默认1024字节) 的大小和所需取出字段的总大小来
 判断使用哪种排序模式。
 1. 如果 max_length_for_sort_data 比查询字段的总长度大，那么使用 单路排序模式；
 2. 如果 max_length_for_sort_data 比查询字段的总长度小，那么使用 双路排序模式。
@@ -429,7 +430,7 @@ MySQL 通过比较系统变量 max_length_for_sort_data(默认1024字节) 的大
 
 单路排序：一次性取出满足条件的所有字段，然后再内存sort buff中进行排序，用trace工具可以看到sort_mode信息里面显示``` < sort_key, additional_fields >或者< sort_key, packed_additional_fields >```。
 
-双路排序（回表排序）：首先去除排序的字段和对应的行id,然后再sort buff中进行排序，排完序后再次回表取出其他字段，用trace工具可以看到sort_mode信息里显示```< sort_key, rowid >```。
+双路排序（回表排序）：首先去取排序的字段和对应的行id,然后再sort buff中进行排序，排完序后再次回表取出其他字段，用trace工具可以看到sort_mode信息里显示```< sort_key, rowid >```。
 
 ### Limit优化
 ```mysql> select * from employees limit 10000,10;```
@@ -455,14 +456,24 @@ MySQL 通过比较系统变量 max_length_for_sort_data(默认1024字节) 的大
   ```EXPLAIN select*from t1 inner join t2 on t1.a= t2.a;```
   ![picture 1](img/Mysql/Mysql_join_NLJ.png)  
 
-  一次一行循环地从第一张表（称为驱动表）中读取行，在这行数据中取到关联字段，根据关联字段在另一张表（被驱动。
+  一次一行循环地从第一张表（称为驱动表）中读取行，在这行数据中取到关联字段，根据关联字段在另一张表（被驱动）。
   从执行计划中可以看到这些信息：
   - 驱动表是 t2，被驱动表是 t1。先执行的就是驱动表(执行计划结果的id如果一样则按从上到下顺序执行sql)；优化器一般会优先选择小表做驱动表。所以使用 inner join 时，排在前面的表并不一定就是驱动表。
   - 使用了 NLJ算法。一般 join 语句中，如果执行计划 Extra 中未出现 Using join buffer 则表示使用的 join 算法是 NLJ表）里取出满足条件的行，然后取出两张表的结果合集。
+
+    ```
+    1. 从表 t2 中读取一行数据；
+    2. 从第 1 步的数据中，取出关联字段 a，到表 t1 中查找；
+    3. 取出表 t1 中满足条件的行，跟 t2 中获取到的结果合并，作为结果返回给客户端；
+    4. 重复上面 3 步。
+    ``` 
+
+
 - 基于块的嵌套循环连接 Block Nested-Loop Join 算法  
-如果被驱动表的关联字段没有索引，使用NLJ算法的性能会比较第，mysql会选择BNLJ算法。BNLJ算法：把驱动表的数据读入到 join_buffer 中，然后扫描被驱动表，把被驱动表每一行取出来跟join_buffer 中的数据做对比。
+如果被驱动表的关联字段没有索引，使用NLJ算法的性能会比较低，mysql会选择BNLJ算法。BNLJ算法：把驱动表的数据读入到 join_buffer 中，然后扫描被驱动表，把被驱动表每一行取出来跟join_buffer 中的数据做对比。
 ![picture 2](img/Mysql/Mysql_join_BNLJ.png) 
-整个过程对表 t1 和 t2 都做了一次全表扫描，因此扫描的总行数为10000(表 t1 的数据总量) + 100(表 t2 的数据总量) =10100。并且 join_buffer 里的数据是无序的，因此对表 t1 中的每一行，都要做 100 次判断，所以内存中的判断次数是100 * 10000= 100 万次。 
+整个过程对表 t1 和 t2 都做了一次全表扫描，因此扫描的总行数为10000(表 t1 的数据总量) + 100(表 t2 的数据总量) =10100。并且 join_buffer 里的数据是无序的，因此对表 t1 中的每一行，都要做 100 次判断，所以内存中的判断次数是100 * 10000= 100 万次。
+
 #### 被驱动表的关联字段没索引为什么要选择使用 BNL 算法而不使用 Nested-Loop Join 呢？
 如果上面第二条sql使用 Nested-Loop Join，那么扫描行数为 100 * 10000 = 100万次，这个是磁盘扫描。很显然，用BNL磁盘扫描次数少很多，相比于磁盘扫描，BNL的内存计算会快得多。因此MySQL对于被驱动表的关联字段没索引的关联查询，一般都会使用 BNL 算法。如果有索引一般选择 NLJ 算法，有索引的情况下 NLJ 算法比 BNL算法性能更高。
 
@@ -485,9 +496,28 @@ straight_join解释：straight_join功能同join类似，但能让左边的表�
 ### count() 优化
 ```
 mysql> EXPLAIN select count(1) from employees;
-mysql> EXPLAIN select count(id) from employees;mysql> EXPLAIN select count(name) from employees;
+mysql> EXPLAIN select count(id) from employees;
+mysql> EXPLAIN select count(name) from employees;
 mysql> EXPLAIN select count(*) from employees;
 ```  
+（1）count(*)---包括所有列，返回表中的记录数，相当于统计表的行数，在统计结果的时候，不会忽略列值为NULL的记录。
+
+（2）count(1)---忽略所有列，1表示一个固定值，也可以用count(2)、count(3)代替，在统计结果的时候，不会忽略列值为NULL的记录。
+
+（3）count(列名)---只包括列名指定列，返回指定列的记录数，在统计结果的时候，会忽略列值为NULL的记录（不包括空字符串和0），即列值为NULL的记录不统计在内。
+
+count(*)&count(1)&count(列名)执行效率比较：
+
+（1）如果列为主键，count(列名)效率优于count(1)
+
+（2）如果列不为主键，count(1)效率优于count(列名)
+
+（3）如果表中存在主键，count(主键列名)效率最优
+
+（4）如果表中只有一列，则count(*)效率最优
+
+（5）如果表有多列，且不存在主键，则count(1)效率优于count(*)
+
 四个sql的执行计划一样，说明这四个sql执行效率应该差不多，区别在于根据某个字段count不会统计字段为null值的数据行。
 
 查询mysql自己维护的总行数
@@ -543,7 +573,8 @@ MyISAM在执行查询select语句前都会自动给涉及的所有表加表锁�
 ![picture 1](img/Mysql/Mysql_tx_isolation.png) 
 
 ### 可重复读的实现原理
-可重复读依赖于MVCC(multi-version concurrency control)机制，基于下图原理实现：
+可重复读依赖于MVCC(multi-version concurrency control)机制，基于下图原理实现：注意相同事务里面的查询的一致性视图快照时相同的。
+
 ![picture 3](img/Mysql/Mysql_rpr_mvcc_data.png)  
 ![picture 2](img/Mysql/Mysql_rpr_mvcc.png)  
 
@@ -557,8 +588,7 @@ Mysql默认级别是repeatable-read，会出现幻读，使用间隙锁在某些
 
 ### 锁定特定行与死锁
 #### 锁定特定行
-锁定某一行还可以用```lock in share mode(共享锁)``` 和```for update(排
-它锁)```，例如：```select * from test_innodb_lock where a = 2 for update;```这样其他session只能读这行数据，修改则会被阻塞，直到锁定行的session提交。
+锁定某一行还可以用```lock in share mode(共享锁)``` 和```for update(排它锁)```，例如：```select * from test_innodb_lock where a = 2 for update;```这样其他session只能读这行数据，修改则会被阻塞，直到锁定行的session提交。
 #### 死锁
 ```set tx_isolation='repeatable-read';```
 - Session_1执行：```select * from account where id=1 for update;```
