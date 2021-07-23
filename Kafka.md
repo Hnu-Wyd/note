@@ -33,13 +33,13 @@
   - [分区数量越多吞吐量越高](#分区数量越多吞吐量越高)
 
 ### Kafka
-Kafka是基于Scala语言编写的，分布式的，支持分区的，和多福本的，基于zookeeper协调的分布式消息系统。它最大的特性就是可以实时处理大量数据已满足各种需求场景，比如日志收集、消息系统、低延迟实时系统，web/nginx日志等场景。
+Kafka是基于Scala语言编写的，分布式的，支持分区的，和多副本的，基于zookeeper协调的分布式消息系统。它最大的特性就是可以实时处理大量数据以满足各种需求场景，比如日志收集、消息系统、低延迟实时系统，web/nginx日志等场景。
 
 ### Kafka的基本概念
 Kafka是一个分布式的，分区消息服务，kafak借鉴了JMS的规范思想，但并没有完全遵循这个思想。
 - Broker：消息的处理节点，一个kafka实例就是一个broker，多个broker节点可以组成kafka集群，可以把broker理解为一个kafka服务。broker基于tcp协议和producer和consumer进行通信。
 - topic：kafak根据主题对消息进行分类，生产者发布消息到kafka需要指定主题。
-- partition：分区，一个主题可以有多个分区，一个分区可以有多个副本，同时一个分区里面的消息是 有序的，但是一个主题里面的消息整体看是无序的。
+- partition：分区，一个主题可以有多个分区，一个分区可以有多个副本，同时一个分区里面的消息是有序的，但是一个主题里面的消息整体看是无序的。
 - producer：消息生产者，通过指定主题向broker发送消息。
 - consumer：消息消费者，从broker读取消息。
 - consumerGroup：每个消费者都有一个组，一个组中只能有一个消费者消费同一主题下的一个分区，也就是一条消息只能被同组的一个消费者消费，可以被不同的消费者组消费。
@@ -49,6 +49,7 @@ Kafka是一个分布式的，分区消息服务，kafak借鉴了JMS的规范思�
 
 ### Kafka主题和消息日志
 kafak依据主题对消息进行归类，同一类消息发送到相同主题上，一个主题可以有多个分区，每个分区都维护着自己的日志文件```commit log```，同一分区里面的消息是有序的，按顺序添加，每个分区中的消息都有一个唯一编号，称之为offset，用来唯一标识分区中的消息，同一分区中的offset是唯一的，不同分区中的offset可能会相同。
+
 ![picture 3](img/Kafka/Kafka_partition.png)  
 
 假如一个订单消息，量很大，达到几百G甚至上T，如果不分区，全部消息都放到一个主题上，都放到一台机器上肯定会有一定的容量现限制，因此可以对主题划分分区，不同分区可以放在不同的机器上，每一个机器都对应一个broker进程。理论上分区之后，一个消费者可以存储任意数量的数据；而且提高了并行度。
@@ -59,7 +60,7 @@ kafka的性能不受消息日志保留时长的限制，每个消费者基于com
 每个分区都有一个leader，在某一个broker上，有0或多个broker作为followers，leader分区处理所有对分区的读写，而followers则只需被动复制leader的结果，如果leader宕机，就选择其中的一个follwer作为leader。
 
 #### Producer生产者
-每个生产者通过push来推送消息，把消息推送到指定的分区，可以通过round-robin轮询的方式做简单负载均衡，可以根据某一个关键字来进行区分。、
+每个生产者通过push来推送消息，把消息推送到指定的分区，可以通过round-robin轮询的方式做简单负载均衡，可以根据某一个关键字来进行区分。
 
 #### Consumer消费者
 通常有两种传递消息的方式，队列（queue）和发布订阅模式（publish-subscribe）
@@ -72,16 +73,16 @@ Kafka基于这两种模式，提出了一个抽象的概念：消费者组（con
 #### 消费顺序
 kafka比传统的消息系统有着更强的顺序保证，一个分区中的消息在同一时刻在一个消费者组中只能被一个消费者消费。Kafka只能保证在分区范围内的消息的顺序性，不能保证消息的整体消费顺序。如果需要保证整体的消费顺序的话可以一个主题只创建一个分区。
 
-Kafka保证发送到topic中的message会按照发送的顺序添加到commit log中，同一个生产者发送消息1和消息2，,早于消息2，那么在commit log中1的offset必定小于2的offset。
+Kafka保证发送到topic中的message会按照发送的顺序添加到commit log中，同一个生产者发送消息1和消息2，消息1早于消息2，那么在commit log中1的offset必定小于2的offset。
 
 Kafka保证如果一个主题的备份因子为N，kafka保证如果N-1个备份宕机，而存储在commit log中的消息不会丢失。
 
 #### Topic信息说明
 ![picture 5](img/Kafka/Kafka_topic.png)  
 第一行是所有分区的概要信息，之后的每一行表示每一个分区的信息。
-- leader：复制给的分区的所有读写请求。
+- leader：负责所在分区的所有读写请求。
 - replicas：备份副本，列出所有的备份副本，包含leader以及挂掉的节点也会列出。
-- isr：表示存活且一同的节点，它是replicas的一个子集。
+- isr：表示存活且已同步的节点，它是replicas的一个子集。
 
 
 ### Java客户端重要参数设置
@@ -96,21 +97,21 @@ public class MsgProducer {
         发出消息持久化机制参数
         （1）acks=0： 表示producer不需要等待任何broker确认收到消息的回复，就可以继续发送下一条消息。性能最高，但是最容易丢消息。
         （2）acks=1： 至少要等待leader已经成功将数据写入本地log，但是不需要等待所有follower是否成功写入。就可以继续发送下一条消息。
-        这种情况下，如果follower没有成功备份数据，而此时leader
-        又挂掉，则消息会丢失。
+        这种情况下，如果follower没有成功备份数据，而此时leader又挂掉，则消息会丢失。
         （3）acks=‐1或all： 这意味着leader需要等待所有备份(min.insync.replicas配置的备份个数)都成功写入日志，这种策略会保证只要有
-        一个备份存活就不会丢失数据。
-        这是最强的数据保证。一般除非是金融级别，或跟钱打交道的场景才会使用这种配置。
+        一个备份存活就不会丢失数据。这是最强的数据保证。一般除非是金融级别，或跟钱打交道的场景才会使用这种配置。
         */
         props.put(ProducerConfig.ACKS_CONFIG, "1");
-        //发送失败会重试，默认重试间隔100ms，重试能保证消息发送的可靠性，但是也可能造成消息重复发送，比如网络抖动，所以需要在接收者那边做好消息接收的幂等性处理
+        //发送失败会重试，默认重试间隔100ms，重试能保证消息发送的可靠性，但是也可能造成消息重复发送，比如网络抖动，
+        //所以需要在接收者那边做好消息接收的幂等性处理
         props.put(ProducerConfig.RETRIES_CONFIG, 3);
         //重试间隔设置
         props.put(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, 300);
         //设置发送消息的本地缓冲区，如果设置了该缓冲区，消息会先发送到本地缓冲区，可以提高消息发送性能，默认值是33554432，即32MB
         props.put(ProducerConfig.BUFFER_MEMORY_CONFIG, 33554432);
         //kafka本地线程会从缓冲区取数据，批量发送到broker，
-        //设置批量发送消息的大小，默认值是16384，即16kb，就是说一个batch满了16kb就发送出去22 props.put(ProducerConfig.BATCH_SIZE_CONFIG, 16384);
+        //设置批量发送消息的大小，默认值是16384，即16kb，就是说一个batch满了16kb就发送出去
+        props.put(ProducerConfig.BATCH_SIZE_CONFIG, 16384);
         //默认值是0，意思就是消息必须立即被发送，但这样会影响性能
         //一般设置100毫秒左右，就是说这个消息发送完后会进入本地的一个batch，如果100毫秒内，这个batch满了16kb就会随batch一起被发送出去 
         //如果100毫秒内，batch没满，那么也必须把消息发送出去，不能让消息的发送延迟时间太长
@@ -172,10 +173,11 @@ public class MsgConsumer {
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "192.168.0.60:9092");
         // 消费分组名
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "testGroup");
-        // 是否自动提交offset8 /*props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
+        // 是否自动提交offset
+        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
         // 自动提交offset的间隔时间
-        props.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, "1000");*/
-        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+        props.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, "1000");
+        // props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
         /*
         心跳时间，服务端broker通过心跳确认consumer是否故障，如果发现故障，就会通过心跳下发
         rebalance的指令给其他的consumer通知他们进行rebalance操作，这个时间可以稍微短一点
@@ -235,10 +237,10 @@ public class MsgConsumer {
 Kafka集群中有一个或者多个Broker，其中一个会被选为leader，它负责管理整个集群中的分区和副本。
 - 当某个分区的leader副本挂掉后，由总控制器选择一个副本为新的leader.
 - 当检测到某个分区的ISR集合发生变化时，由总控制器通知其他broker更新元数据。
-- 当给某一个主题增加分区的时候，由总控制器复制分区的重新分配。
+- 当给某一个主题增加分区的时候，由总控制器负责分区的重新分配。
 
 ### Kafka总控制器的选举机制
-当集群启动的时候，会选举一个broker作为集群的leader，启动时每个broker都会往zookeeper上创建一个临时节点```/controller```，zookeeper保证有且仅有一个broker可以创建成功，哪一个broker创建成功，则他就是kafka集群的总控制器。
+当集群启动的时候，会选举一个broker作为集群的leader，启动时每个broker都会往zookeeper上创建一个临时节点```/controller```，zookeeper保证有且仅有一个broker可以创建成功，哪一个broker创建成功，则它就是kafka集群的总控制器。
 
 不是总控制器的broker会监听这个节点的变化，当总控制器的broker发生宕机的时候，zookeeper上的这个节点会自动删除，这是其他节点又会重新开始竞争创建```/controller```临时节点，谁先创建成功谁就是新的总控制器。
 
@@ -255,7 +257,7 @@ Kafka集群中有一个或者多个Broker，其中一个会被选为leader，它
 kafka中的每个消费者记录自己的消费进度，会定期更新消费分区的offset到kafka内部维护的主题：```_consumer_offsets```，key为：```consumerGroupId+topic+分区号```，value为对于的```offset```；kafka对定期清理此主题里面的消息，只保留最新的数据。同时为了提高并发性能，此主题默认有50个分区，可以通过参数```offset.topic.num.partitions```设置，这样可以通过增加机器来增加并发。
 
 ### 消费者Rebalance机制
-消费者rebalacne机制就是消费者组中某一个消费者挂掉，此后此消费者对于的消费分区要分配给其他消费者，如果又重启了则又把对于的分区还给它，以下情况会导致消费者rebalance：
+消费者rebalacne机制就是消费者组中某一个消费者挂掉，此后此消费者对应的消费分区要分配给其他消费者，如果又重启了则又把对于的分区还给它，以下情况会导致消费者rebalance：
 - 消费分区的消费者宕机或重启
 - 给主题增加更多的分区
 - 消费组订阅了新的主题
@@ -264,11 +266,11 @@ kafka中的每个消费者记录自己的消费进度，会定期更新消费分
 ![picture 7](img/Kafka/Kafka_group_coordinator.png)  
 
 
-1. 选择主协调器
+1. 选择组协调器
 
-    每个消费者组都会选择一个broker作为协调器（GroupCoordinator）， 负责监控这个消费组中每个消费者的心跳，以及是否出现宕机，然后启动rebalance机制。每个消费者加入消费者组的时候都会向集群中勋章组协调器，并与其建立网络连接。主协调器的选择过程如下。
+    每个消费者组都会选择一个broker作为协调器（GroupCoordinator）， 负责监控这个消费组中每个消费者的心跳，以及是否出现宕机，然后启动rebalance机制。每个消费者加入消费者组的时候都会向集群中查找主协调器，并与其建立网络连接。主协调器的选择过程如下。
 
-    每个消费者组中的每个消费者都需要把消费的消费发送到kafka集群中的内部主题的分区上，选则分区的公式是：```hash(ConsumerGroupId%_consumer_offsets主题的分区数)``` 这个分区对于的leader所在的broker即为此消费组的组协调器。
+    每个消费者组中的每个消费者都需要把消费的消费发送到kafka集群中的内部主题的分区上，选则分区的公式是：```hash(ConsumerGroupId)%_consumer_offsets主题的分区数)``` 这个分区对于的leader所在的broker即为此消费组的组协调器。
 
 2. 加入消费组
 
@@ -280,7 +282,7 @@ kafka中的每个消费者记录自己的消费进度，会定期更新消费分
 
 #### Relabance策略
 假如有10个分区，3个消费者。主要有三种relabance策略：
-- rang：默认策略，，则（0~3）给消费者1，（4~6）给2，（7~9）给3。
+- rang：默认策略，则（0~3）给消费者1，（4~6）给2，（7~9）给3。
 - round-robin轮询：（0，3，6 ，9）给1，（1，4，7）给2，(2，5，8)给3。
 - sticky：有两个原则，尽量使其分配均匀，尽量不改变上次的分区方案。当两者方式冲突的时候，第一原则优先。比如第一种rang的情况，如果消费者3挂掉了，则使用sticky策略分配如下，（0~3,7）分配给1，（4~6,8,9）分配给2，使其尽可能的均匀。
 
@@ -295,16 +297,17 @@ producer采用push模式将消息发送到broker，每条消息都被追加到�
 - 未指定分区也未指定key，使用轮询选出一个分区。
 
 #### 写入commit log流程
-- 先找到对于的分区的leader节点，从zookeeper的```/brokers/.../state```可以找到对于的分区。
-- 消息生产者将消息发送给生产者。
-- 生产者写入本地log
+- 先找到对于的分区的leader节点，从zookeeper的```/brokers/.../state```可以找到对应的分区。
+- 消息生产者将消息发送给分区leader。
+- 分区leader写入本地log
 - 分区备份节点从leader节点pull拉取数据，同样的写入本地log，写入成功后向leader节点发送ack。
 - leader收到副本的ack消息后，增加高水位HW(high watermark)，最后commit offset，并向生产者发送ACK。
 
 ![picture 8](img/Kafka/Kafka_producer_commit_log.png)  
 
 #### HW和LEO
-HW即为高水位，是HighWatermark的缩写，取的是分区副本ISR中对应的最小的LEO(log-end-offset)作为HW，消费者最多只能消费到高水位的位置，对于写入leader的消息，消费者并不能立即消费，leader等待所有副本同步后更新高水位此时生产的消息才能被消费。这样保证了leader宕机后，改消息仍然可以从新选择的leader消息中获取。对于broker内部的读取请求，没有高水位限制。
+HW即为高水位，是HighWatermark的缩写，取的是分区副本ISR中对应的最小的LEO(log-end-offset)作为HW，消费者最多只能消费到高水位的位置，对于写入leader的消息，消费者并不能立即消费，leader等待所有副本同步后更新高水位此时生产的消息才能被消费。这样保证了leader宕机后，该消息仍然可以从新选择的leader消息中获取。对于broker内部的读取请求，没有高水位限制。
+
 ![picture 9](img/Kafka/Kafka_HW.png)  
 
 Kafka的数据复制方式既不是同步也不是异步，同步影响kafka的吞吐量，异步方式容易造成数据丢失，结合生产者acks=1的情况来看。
@@ -312,7 +315,7 @@ Kafka的数据复制方式既不是同步也不是异步，同步影响kafka的�
 
 
 ### 日志分段存储
-kafka一个分区的消息书对于存储在一个文件夹下，以topic+分区号命名，限定最大的。log文件不能超过1G，以便把log文件加载到内存。
+kafka一个分区的消息对应存储在一个文件夹下，以topic+分区号命名，限定最大的log文件不能超过1G，以便把log文件加载到内存。
 ```
 1 # 部分消息的offset索引文件，kafka每次往分区发4K(可配置)消息就会记录一条当前消息的offset到index文件，
 2 # 如果要定位消息的offset会先在这个文件里快速定位，再去log文件里找具体消息
@@ -357,8 +360,7 @@ kafka一个分区的消息书对于存储在一个文件夹下，以topic+分区
 ![picture 11](img/Kafka/Kafka_delay_queue.png)  
 
 #### 消息积压
-线上有时因为发送方发送消息速度过快，或者消费方处理消息过慢，可能会导致broker积压大量未消费消息。此种情况如果积压了上百万未消费消息需要紧急处理，可以修改消费端程序，让其将收到的消息快速转发到其他topic(可以设置很多分
-区)，然后再启动多个消费者同时消费新主题的不同分区。
+线上有时因为发送方发送消息速度过快，或者消费方处理消息过慢，可能会导致broker积压大量未消费消息。此种情况如果积压了上百万未消费消息需要紧急处理，可以修改消费端程序，让其将收到的消息快速转发到其他topic(可以设置很多分区)，然后再启动多个消费者同时消费新主题的不同分区。
 
 #### 消息乱序
 如果发送端配置了重试机制，kafka不会等之前那条消息完全发送成功才去发送下一条消息，这样可能会出现，发送了1，2，3条消息，第一条超时了，后面两条发送成功，再重试发送第1条消息，这时消息在broker端的顺序就是2，3，1了所以，是否一定要配置重试要根据业务情况而定。也可以用同步发送的模式去发消息，当然acks不能设置为0，这样也能保证消息从发送端到消费端全链路有序。
