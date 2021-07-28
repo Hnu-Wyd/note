@@ -219,12 +219,15 @@ leader选举分为两个过程：
 同步时涉及两个流程，一个是正常的客户端数据提交，另一个是集群某个节点宕机在恢复后的数据同步。
 #### 客户端写入请求
    写入请求的大至流程是，收leader接收客户端写请求，并同步给各个子节点。但实际情况要复杂的多，比如client 它并不知道哪个节点是leader 有可能写的请求会发给follower ，由follower在转发给leader进行同步处理。
+
    ![picture 9](img/ZooKeeper/zk_data_sync.png) 
-   - client向zk中的server发送写请求，如果该server不是leader，则会将该写请求转发给leader server，leader将请求事务以proposal形式分发给follower；
-	- 当follower收到收到leader的proposal时，根据接收的先后顺序处理proposal；
-	- 当Leader收到follower针对某个proposal过半的ack后，则发起事务提交，重新发起一个commit的proposal
-	- Follower收到commit的proposal后，记录事务提交，并把数据更新到内存数据库；
-	- 当写成功后，反馈给client。
+
+
+- client向zk中的server发送写请求，如果该server不是leader，则会将该写请求转发给leader server，leader将请求事务以proposal形式分发给follower
+- 当follower收到收到leader的proposal时，根据接收的先后顺序处理proposal；
+- 当Leader收到follower针对某个proposal过半的ack后，则发起事务提交，重新发起一个commit的proposal
+- Follower收到commit的proposal后，记录事务提交，并把数据更新到内存数据库；
+- 当写成功后，反馈给client。
  #### 服务节点初始化同步
  在集群运行过程当中如果有一个follower节点宕机，由于宕机节点没过半，集群仍然能正常服务。当leader 收到新的客户端请求，此时无法同步给宕机的节点。造成数据不一至。为了解决这个问题，当节点启动时，第一件事情就是找当前的Leader，比对数据是否一至。不一至则开始同步,同步完成之后在进行对外提供服务。如何比对Leader的数据版本呢，这里通过ZXID事务ID来确认。比Leader小就需要同步。
 
@@ -240,6 +243,7 @@ zk数据的存储是通过DataTree 对象进行，其用了一个map 来进行�
 ![picture 7](img/ZooKeeper/zk_data_base.png)  
 
 #### Zookeeper恢复数据流程
+
 1. ZK会持久化磁盘两种文件：log和snapshot
 2. log只负责记录每一个写请求
 3. snapshot负责对当前整个内存数据进行快照
@@ -251,6 +255,23 @@ zk数据的存储是通过DataTree 对象进行，其用了一个map 来进行�
 
 ### ZooKeeper负载均衡和Nginx负载均衡的区别
 zk的负载均衡可以调控，ng只能调控权重，其他需要调控的都需要写插件，但是ng的吞吐量比zk大很多，根据应用场景决定。
+
+###  ZK与CP
+zk遵循的是CP原则，即保证一致性和网络分区容错性，但不保证可用性。体现在哪里呢？
+
+当Leader宕机后，zk集群会发起新一轮投票选举，投票选举期间所有的Follower主机都处于LOOKING状态，对外不提供服务。但Leader的选举一般在200ms内完成，最长不超过60s，整个选举期间，zk集群是不对外提供服务的，不接受客户端的读写请求的，即zk集群处于瘫痪状态。所以它不满足可用性。
+
+### zk可能存在脑裂问题
+zk脑裂问题指的是：在多机房部署中，若出现网络连接问题，形成多个分区，则可能出现脑裂问题，如果出现脑裂问题，可能会导致数据不一致。
+
+![picture 10](img/ZooKeeper/zk_split.png)  
+
+当A机房、B机房、C机房之间的网络都正常连接的时候，3个机房的zk主机形成了一个zk集群，A机房有一台zk主机被选举为Leader，B、C机房的zk主机全部是Follower；
+
+当A机房与B机房，A机房与C机房网络突然中断，导致B、C机房的Follower不能与A机房的Leader通信，此时B、C机房的Follower就会认为Leader已经挂了，B、C机房机会进入重新Leader选举，最终会在B or C机房中选举一台zk主机为Leader；
+
+当B、C机房中的某台zk主机被选举为Leader时，此时A、B、C三个机房同时存在了2个Leader，这就是zk脑裂问题，如果A、B、C三个机房的zk同时提供对外服务，可能就会导致数据不一致问题。
+
    
 
 
