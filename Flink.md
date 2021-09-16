@@ -73,7 +73,7 @@ Flink是为分布式、高性能，随时可用以及准确的流处理应用打
 ### Flink的特点
 - 事件驱动型
 
-    事件驱动型是一类具有状态的应用，它聪一个或多个事件流程中提取数据，并根据事件触发计算、状态更新或其他外部动作。比较典型的就是以Kafka为代表的消息队列几乎都是事件驱动型应用。与之不同的就是SparkStreaming微批次，如下图所示。
+    事件驱动型是一类具有状态的应用，它从一个或多个事件流程中提取数据，并根据事件触发计算、状态更新或其他外部动作。比较典型的就是以Kafka为代表的消息队列几乎都是事件驱动型应用。与之不同的就是SparkStreaming微批次，如下图所示。
     ![picture 9](img/Flink/Spark_Streaming.png) 
 
     事件驱动型
@@ -84,7 +84,7 @@ Flink是为分布式、高性能，随时可用以及准确的流处理应用打
 
     批处理的特点就是有界、持久、大量，非常适合访问全套记录才能完成计算工作，一般用于离线计算。
 
-    流处理的特点是无解、实时无需针对整个数据集执行操作，而是对通过系统传输的每个数据项执行操作，一般用于实时计算。
+    流处理的特点是无界、实时无需针对整个数据集执行操作，而是对通过系统传输的每个数据项执行操作，一般用于实时计算。
 
     在Spark的世界观中，一切都是有批次组成的，离线数据就是一个大批次，而实时数据是由一个个无线的小批次组成的。
 
@@ -110,6 +110,7 @@ Flink提供了两种在yarn上运行的模式，分别为Session-Cluster模式�
 
 #### Session-Cluster模式
 Sesssion-Cluster模式需要先启动集群，然后再提交作业，接着会向yarn申请一块空间后，资源永远保持不变，如果资源满了，下一个作业就无法提交，只能等到yarn中的其中一个作业执行完成后，释放资源，下个作业才会正常提交。所有作业共享Dispatcher和ResourceManager。共享资源，适合小规模执行时间短的作业。在yarn中初始化一个flink集群，开辟指定的资源，以后提交任务都向这里提交。这个flink集群会常驻在yarn集群中，除非手工停止。
+
 ![picture 12](img/Flink/Session_Cluster.png)  
 
 
@@ -329,7 +330,7 @@ window function 定义了要对窗口中收集的数据做的计算操作，可�
 #### 算子状态（Operator State）
 ![picture 28](img/Flink/Operator_State.png) 
 
-算子状态的作用范围限定为算子任务，算子状态的作用范围限定为算子任务，由同一并行任务所处理的所有数据都可以访问到相同的状态，状态对于同一子任务而言是共享的，算子状态不能由相同或不同算子的另一个子任务访问。
+算子状态的作用范围限定为算子任务，由同一并行任务所处理的所有数据都可以访问到相同的状态，状态对于同一子任务而言是共享的，算子状态不能由相同或不同算子的另一个子任务访问。
 
 算子状态的数据结构
 - 列表状态（List state）将状态表示为一组数据的列表
@@ -373,9 +374,11 @@ window function 定义了要对窗口中收集的数据做的计算操作，可�
 
 #### 一致性检查点
 Flink故障的核心恢复机制就是应用状态的一致性检查点。有状态流应用的一致性检查点，其实就是所有任务的状态，在某个时间点的一份快照，在这个时间点，应该是所有任务都恰好处理完一个相同的输入数据。
+
 ![picture 1](img/Flink/Check_Point.png) 
 
 在执行流应用程序期间，Flink会定期的保存状态的一致性检查点，如果发生故障，Flink将会使用最近的检查点一致恢复应用程序的状态，并重新启动处理流程。
+
 ![picture 2](img/Flink/Check_Point_Recover.png)  
 
 #### 检查点的恢复
@@ -402,25 +405,32 @@ Flink故障的核心恢复机制就是应用状态的一致性检查点。有状
 
 #### 检查点算法举例
 例如现在是一个有两个输入流的应用程序，用并行的两个Source任务来读取。
+
 ![picture 6](img/Flink/CP_Instance.png)  
 
 JobManager会向每个Source任务发送一条带有新检查点ID的消息，通过这种方式来启动检查点。
+
 ![picture 7](img/Flink/CP_ID.png)
 
 数据源将它们的状态写入检查点，并发出一个检查点Barrier，状态后端在状态存入检查点之后，会返回通知给Source任务，source任务就会向JobManager确认检查点完成。
+
 ![picture 8](img/Flink/CP_Barrier_Store.png)  
 
 
-分界线对齐，barrier向下游传递，sum任务会等待所有输入分区的barrier到达，对弈barrier已经到达的分区，继续到达的数据会被缓存，而barrier尚未到达的分区，数据会被正常处理。
+分界线对齐，barrier向下游传递，sum任务会等待所有输入分区的barrier到达，对于barrier已经到达的分区，继续到达的数据会被缓存，而barrier尚未到达的分区，数据会被正常处理。
+
 ![picture 9](img/Flink/CP_Barrier_Align.png)  
 
 当收到所有输入分区的 barrier 时，任务就将其状态保存到状态后端的检查点中，然后将 barrier 继续向下游转发。
+
 ![picture 10](img/Flink/CP_Barrier_Arrived.png)  
 
 向下游转发检查点barrier后，任务会进行正常的数据处理。
+
 ![picture 11](img/Flink/CP_Receiver_Continue.png)  
 
 Sink任务向JobManager确认状态保存到checkpoint完毕，当所有任务都确认已成功将状态保存到检查点时，检查点就真正的完成了。
+
 ![picture 12](img/Flink/CP_Completed.png)  
 
 
@@ -434,6 +444,7 @@ Sink任务向JobManager确认状态保存到checkpoint完毕，当所有任务�
 
 #### 什么是状态一致性
 有状态的流处理，内部每个算子任务都可以有自己的状态对于流处理器内部来说，所谓的状态一致性，其实就是我们所说的计算结果要保证准确。一条数据不应该丢失，也不应该重复计算在遇到故障时可以恢复状态，恢复以后的重新计算，结果应该也是完全正确的。
+
 ![picture 13](img/Flink/State_Consistency.png)  
 
 
@@ -441,7 +452,7 @@ Sink任务向JobManager确认状态保存到checkpoint完毕，当所有任务�
 - AT-MOST-ONCE（最多一次）
   
   当任务故障时，最简单的做法是什么都不干，既不恢复丢失的状态，也不重播丢失的数据。At-most-once 语义的含义是最多处理一次事件。
-- 
+
 - AT-LEAST-ONCE（至少一次）
   
   在大多数的真实应用场景，我们希望不丢失事件。这种类型的保障称为 at-least-once，意思是所有的事件都得到了处理，而一些事件还可能被处理多次。
@@ -453,7 +464,8 @@ Sink任务向JobManager确认状态保存到checkpoint完毕，当所有任务�
 #### 一致性检查点
 - Flink 使用了一种轻量级快照机制 —— 检查点（checkpoint）来保证 exactly-once 语义
 - 有状态流应用的一致检查点，其实就是：所有任务的状态，在某个时间点的一份拷贝（一份快照）。而这个时间点，应该是所有任务都恰好处理完一个相同的输入数据的时候。
-- 应用状态的一致检查点，是 Flink 故障恢复机制的核心
+- 应用状态的一致检查点，是 Flink 故障恢复机制的核心。
+
 ![picture 14](img/Flink/Consistency_Check_Point.png)  
 
 
@@ -507,15 +519,19 @@ Sink任务向JobManager确认状态保存到checkpoint完毕，当所有任务�
 
 #### Exactly-once 两阶段提交
 JobManager 协调各个 TaskManager 进行 checkpoint 存储checkpoint保存在 StateBackend中，默认StateBackend是内存级的，也可以改为文件级的进行持久化保存
+
 ![picture 15](img/Flink/EO_2PC_Step1.png)  
 
 当 checkpoint 启动时，JobManager 会将检查点分界线（barrier）注入数据流，barrier会在算子间传递下去
+
 ![picture 16](img/Flink/EO_2PC_Step2.png) 
 
 每个算子会对当前的状态做个快照，保存到状态后端checkpoint 机制可以保证内部的状态一致性
+
 ![picture 17](img/Flink/EO_2PC_Step3.png)  
  
 每个内部的 transform 任务遇到 barrier 时，都会把状态存到 checkpoint 里；sink 任务首先把数据写入外部 kafka，这些数据都属于预提交的事务；遇到 barrier 时，把状态保存到状态后端，并开启新的预提交事务
+
 ![picture 18](img/Flink/EO_2PC_Step4.png)  
 
 当所有算子任务的快照完成，也就是这次的 checkpoint 完成时，JobManager 会向所有任务发通知，确认这次 checkpoint 完成。sink 任务收到确认通知，正式提交之前的事务，kafka 中未确认数据改为"已确认"。
@@ -569,7 +585,7 @@ Watermark本质是Flink中衡量EventTime进展的一个机制，主要用来处
 Flink依靠checkpoint机制来实现exactly-once语义，如果要实现端到端的exactly-once，还需要外部source和sink满足一定的条件。状态的存储通过状态后端来管理，Flink中可以配置不同的状态后端。
 
 #### Flink 三种时间语义是什么，分别说出应用场景？
-1. Event Time：这是实际应用最常见的时间语义，具体见文档第七章。
+1. Event Time：这是实际应用最常见的时间语义。
 2. Processing Time：没有事件时间的情况下，或者对实时性要求超高的情况下。 
 3. Ingestion Time：存在多个Source Operator的情况下，每个Source Operator可以使用自己本地系统时钟指派 Ingestion Time。后续基于时间相关的各种操作，都会使用数据记录中的 Ingestion Time。
 
