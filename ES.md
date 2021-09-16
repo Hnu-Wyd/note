@@ -45,7 +45,7 @@
 ![picture 3](img/ES/Inverted_Index_Instance.png)  
 
 ### ES简介
-ES是ElasticSearch的简称，是一个分布式的索引库，对外提供检索服务，通过Http的Restful形式对外提供服务，也可以通过Trasport对外提供服务，是一个非关系数据库Nosq。
+ES是ElasticSearch的简称，是一个分布式的索引库，对外提供检索服务，通过Http的Restful形式对外提供服务，也可以通过Trasport对外提供服务，是一个非关系数据库Nosql。
 
 ES中的索引等于数据库，可以有很多个，它的类型type可以理解为一张表，只存在es6.x中，es7.x中没有type这个含义了。文档Docment类似于行数据；Filed是行数据的属性列。
 
